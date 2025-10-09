@@ -7,7 +7,8 @@ def extract_metadata(file_path):
         "author": "Unknown",
         "created": "Unknown",
         "modified": "Unknown",
-        "application": "Unknown"
+        "created_by": "Unknown",
+        "modified_by": "Unknown"
     }
 
     try:
@@ -31,7 +32,12 @@ def extract_metadata(file_path):
 
                 for elem in app_root:
                     if "application" in elem.tag.lower():
-                        metadata["application"] = elem.text
+                        metadata["created_by"] = elem.text
+                        metadata["modified_by"] = elem.text  
+
+            if metadata["created_by"] == "Unknown" and metadata["author"] == "Unknown":
+                metadata["created_by"] = "Google Docs / Cloud Editor (no local metadata)"
+                metadata["modified_by"] = "Google Docs / Cloud Editor (no local metadata)"
 
     except Exception as e:
         print(f"[Error] Could not extract DOCX metadata: {e}")

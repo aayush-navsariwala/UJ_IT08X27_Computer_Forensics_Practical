@@ -5,37 +5,44 @@ def extract_metadata(file_path):
         "created": "Unknown",
         "modified": "Unknown",
         "producer": "Unknown",
-        "title": "Unknown"
+        "title": "Unknown",
+        "created_by": "Unknown",
+        "modified_by": "Unknown"
     }
 
     try:
         with open(file_path, 'rb') as f:
-            content = f.read().decode('latin-1', errors='ignore')  
+            content = f.read().decode('latin-1', errors='ignore')
 
-        if "/Author" in content:
-            start = content.find("/Author")
-            end = content.find("\n", start)
-            metadata["author"] = content[start:end].split("(")[-1].split(")")[0].strip()
+        fields = ["/Author", "/Title", "/Producer", "/CreationDate", "/ModDate"]
+        for field in fields:
+            if field in content:
+                start = content.find(field)
+                end = content.find("\n", start)
+                line = content[start:end]
+                value = line.split("(")[-1].split(")")[0].strip()
 
-        if "/Title" in content:
-            start = content.find("/Title")
-            end = content.find("\n", start)
-            metadata["title"] = content[start:end].split("(")[-1].split(")")[0].strip()
+                if "/Author" in field:
+                    metadata["author"] = value
+                elif "/Title" in field:
+                    metadata["title"] = value
+                elif "/Producer" in field:
+                    metadata["producer"] = value
+                elif "/CreationDate" in field:
+                    metadata["created"] = value
+                elif "/ModDate" in field:
+                    metadata["modified"] = value
 
-        if "/Producer" in content:
-            start = content.find("/Producer")
-            end = content.find("\n", start)
-            metadata["producer"] = content[start:end].split("(")[-1].split(")")[0].strip()
+        if metadata["producer"] != "Unknown":
+            metadata["created_by"] = metadata["producer"]
+            metadata["modified_by"] = metadata["producer"]
 
-        if "/CreationDate" in content:
-            start = content.find("/CreationDate")
-            end = content.find("\n", start)
-            metadata["created"] = content[start:end].split("(")[-1].split(")")[0].strip()
-
-        if "/ModDate" in content:
-            start = content.find("/ModDate")
-            end = content.find("\n", start)
-            metadata["modified"] = content[start:end].split("(")[-1].split(")")[0].strip()
+            if "word" in metadata["producer"].lower():
+                metadata["created_by"] = "Microsoft Word"
+            elif "acrobat" in metadata["producer"].lower():
+                metadata["modified_by"] = "Adobe Acrobat"
+            elif "libreoffice" in metadata["producer"].lower():
+                metadata["modified_by"] = "LibreOffice PDF Exporter"
 
     except Exception as e:
         print(f"[Error] Could not extract PDF metadata: {e}")
