@@ -3,23 +3,32 @@ import struct
 def extract_metadata(file_path):
     metadata = {
         "file_type": "image",
-        "make": "Unknown",
+        "make": "Unknown",            
         "camera_model": "Unknown",
         "software": "Unknown",
-        "datetime": "Unknown",          
-        "datetime_digitized": "Unknown", 
-        "exif_version": "Unknown",
+        "datetime": "Unknown",         
+        "datetime_digitized": "Unknown",
+        "exif_version": "Unknown",      
         "width": "Unknown",
         "height": "Unknown",
-        "gps_latitude": "Unknown",
+        "gps_latitude": "Unknown",     
         "gps_longitude": "Unknown",
         "created_by": "Unknown",
-        "modified_by": "Unknown"
+        "modified_by": "Unknown",
+        "title": "Unknown",
+        "author": "Unknown",
+        "description": "Unknown"
     }
 
     try:
         with open(file_path, 'rb') as f:
             data = f.read()
+            
+        png_sig = b'\x89PNG\r\n\x1a\n'
+        if not data.startswith(png_sig):
+            return metadata
+        
+        
 
         exif_start = data.find(b'\xff\xe1')
         if exif_start == -1:
@@ -186,7 +195,6 @@ def _get_ascii(buf, tiff_base, entry, order):
         return "Unknown"
 
 def _get_numeric(buf, tiff_base, entry, order):
-    """Return first numeric value for SHORT/LONG/RATIONAL as int or float."""
     if entry is None: return "Unknown"
     typ, cnt, value4 = entry
     if typ in (3, 4):  

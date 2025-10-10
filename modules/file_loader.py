@@ -11,7 +11,6 @@ def detect_file_type(file_path):
     elif ext in ["jpg", "jpeg"] and header[0:2] == b'\xFF\xD8':
         return "jpg"
     elif ext == "png" and header.startswith(b'\x89PNG'):
-        return "jpg"  
+        return "png"  
     else:
         return "unknown"
-    

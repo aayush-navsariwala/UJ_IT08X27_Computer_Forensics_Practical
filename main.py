@@ -1,6 +1,6 @@
 import os
 from modules.file_loader import detect_file_type
-from modules import metadata_docx, metadata_pdf, metadata_jpg
+from modules import metadata_docx, metadata_pdf, metadata_jpg, metadata_png
 from modules.anomaly_checker import check_anomalies
 from modules.report_generator import generate_report
 
@@ -20,6 +20,8 @@ def main():
         metadata = metadata_pdf.extract_metadata(file_path)
     elif file_type == "jpg":
         metadata = metadata_jpg.extract_metadata(file_path)
+    elif file_type == "png":
+        metadata = metadata_png.extract_metadata(file_path)
     else:
         print("Unsupported file type.")
         return
