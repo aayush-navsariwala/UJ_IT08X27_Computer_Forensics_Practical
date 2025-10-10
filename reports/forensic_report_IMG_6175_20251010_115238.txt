@@ -1,0 +1,26 @@
+File: IMG_6175.JPG
+Generated on: 2025-10-10 11:52:38
+
+Extracted Metadata:
+  - File_type: image
+  - Make: Apple
+  - Camera_model: iPhone XR
+  - Software: 14.2
+  - Datetime: 2021:01:10 17:13:11
+  - Datetime_digitized: Unknown
+  - Exif_version: Unknown
+  - Width: Unknown
+  - Height: Unknown
+  - Gps_latitude: Unknown
+  - Gps_longitude: Unknown
+  - Created_by: iPhone XR
+  - Modified_by: 14.2
+  - Title: Unknown
+  - Author: Unknown
+  - Description: Unknown
+
+Detected Anomalies:
+  - Missing or empty field: author
+
+Risk Score: 20/100
+→ Low likelihood of tampering.
