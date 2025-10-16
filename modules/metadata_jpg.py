@@ -22,13 +22,11 @@ def extract_metadata(file_path):
         with open(file_path, 'rb') as f:
             data = f.read()
 
-        # --- Find APP1 segment that actually contains "Exif\0\0" ---
         tiff = _find_exif_tiff_base(data)
         if tiff is None:
             _fallback_created_modified_unknown(metadata)
             return metadata
 
-        # Endianness
         endian = data[tiff:tiff+2]
         if endian == b'II':
             byte_order = 'little'
@@ -38,62 +36,53 @@ def extract_metadata(file_path):
             _fallback_created_modified_unknown(metadata)
             return metadata
 
-        # TIFF magic
         if _u16(data, tiff+2, byte_order) != 0x002A:
             _fallback_created_modified_unknown(metadata)
             return metadata
 
-        # IFD0
         ifd0_rel = _u32(data, tiff+4, byte_order)
         ifd0 = tiff + ifd0_rel
         tags0 = _parse_ifd(data, tiff, ifd0, byte_order)
 
-        # Make / Model / Software
-        if 0x010F in tags0:  # Make
+        if 0x010F in tags0:  
             metadata["make"] = _get_ascii(data, tiff, tags0[0x010F], byte_order)
-        if 0x0110 in tags0:  # Model
+        if 0x0110 in tags0:  
             metadata["camera_model"] = _get_ascii(data, tiff, tags0[0x0110], byte_order)
-        if 0x0131 in tags0:  # Software
+        if 0x0131 in tags0:  
             sw = _get_ascii(data, tiff, tags0[0x0131], byte_order)
             metadata["software"] = sw
-            metadata["modified_by"] = _normalize_software(sw)
+            metadata["modified_by"] = _normalize_software(sw, metadata.get("make"))
 
-        # Sometimes DateTime (IFD0, 0x0132) exists as a fallback
         if 0x0132 in tags0 and metadata["datetime"] == "Unknown":
             dt0 = _get_ascii(data, tiff, tags0[0x0132], byte_order)
             if dt0 and dt0 != "Unknown":
                 metadata["datetime"] = dt0
 
-        # Dimensions can be in IFD0 (0100/0101)
         if 0x0100 in tags0:
             metadata["width"]  = _get_numeric(data, tiff, tags0[0x0100], byte_order)
         if 0x0101 in tags0:
             metadata["height"] = _get_numeric(data, tiff, tags0[0x0101], byte_order)
 
-        # EXIF IFD pointer (0x8769)
         exif_ifd_ptr = _get_offset_value(data, tiff, tags0.get(0x8769), byte_order) if 0x8769 in tags0 else None
-        # GPS IFD pointer (0x8825)
         gps_ifd_ptr  = _get_offset_value(data, tiff, tags0.get(0x8825), byte_order) if 0x8825 in tags0 else None
 
-        # --- EXIF IFD (datetime original/digitized, exif version, pixel dims) ---
         if exif_ifd_ptr:
             exif_ifd = tiff + exif_ifd_ptr
             tags_exif = _parse_ifd(data, tiff, exif_ifd, byte_order)
 
-            if 0x9003 in tags_exif:  # DateTimeOriginal
+            if 0x9003 in tags_exif:  
                 metadata["datetime"] = _get_ascii(data, tiff, tags_exif[0x9003], byte_order)
-            if 0x9004 in tags_exif:  # DateTimeDigitized
+            if 0x9004 in tags_exif:  
                 metadata["datetime_digitized"] = _get_ascii(data, tiff, tags_exif[0x9004], byte_order)
-            if 0x9000 in tags_exif:  # ExifVersion (raw bytes)
+            if 0x9000 in tags_exif:  
                 exv = _get_bytes(data, tiff, tags_exif[0x9000], byte_order)
                 if exv:
                     try:
-                        s = "".join(chr(b) for b in exv if 48 <= b <= 57)  # digits
+                        s = "".join(chr(b) for b in exv if 48 <= b <= 57)  
                         metadata["exif_version"] = s if s else exv.hex()
                     except:
                         metadata["exif_version"] = exv.hex()
 
-            # Prefer EXIF pixel dimensions (A002/A003) if present
             if 0xA002 in tags_exif:
                 w = _get_numeric(data, tiff, tags_exif[0xA002], byte_order)
                 if w: metadata["width"] = w
@@ -101,7 +90,6 @@ def extract_metadata(file_path):
                 h = _get_numeric(data, tiff, tags_exif[0xA003], byte_order)
                 if h: metadata["height"] = h
 
-        # --- GPS IFD ---
         if gps_ifd_ptr:
             gps_ifd = tiff + gps_ifd_ptr
             tags_gps = _parse_ifd(data, tiff, gps_ifd, byte_order)
@@ -121,16 +109,24 @@ def extract_metadata(file_path):
                 metadata["gps_latitude"]  = f"{lat_dec:.6f}"
                 metadata["gps_longitude"] = f"{lon_dec:.6f}"
 
-        # created_by / modified_by inference
+        if metadata["width"] == "Unknown" or metadata["height"] == "Unknown":
+            sof_w, sof_h = _jpeg_dimensions_from_sof(data)
+            if sof_w and metadata["width"] == "Unknown":
+                metadata["width"] = sof_w
+            if sof_h and metadata["height"] == "Unknown":
+                metadata["height"] = sof_h
+
+        if metadata["datetime_digitized"] == "Unknown" and metadata["datetime"] != "Unknown":
+            metadata["datetime_digitized"] = metadata["datetime"]
+
         if metadata["camera_model"] != "Unknown":
             metadata["created_by"] = metadata["camera_model"]
         elif metadata["make"] != "Unknown":
             metadata["created_by"] = metadata["make"]
-
+            
         if metadata["software"] != "Unknown":
-            metadata["modified_by"] = _normalize_software(metadata["software"])
-
-        # Fallback for fully stripped images
+            metadata["modified_by"] = _normalize_software(metadata["software"], metadata.get("make"))
+            
         if metadata["camera_model"] == "Unknown" and metadata["software"] == "Unknown":
             _fallback_created_modified_unknown(metadata)
 
@@ -139,27 +135,18 @@ def extract_metadata(file_path):
 
     return metadata
 
-
-# ---------------- JPEG / EXIF helpers ----------------
-
 def _find_exif_tiff_base(buf: bytes):
-    """
-    Scan JPEG markers to find APP1 that starts with 'Exif\\0\\0'.
-    Return absolute offset to TIFF header start (immediately after 'Exif\\0\\0'), or None.
-    """
-    if not buf.startswith(b'\xff\xd8'):  # SOI
+    if not buf.startswith(b'\xff\xd8'):  
         return None
     i = 2
     n = len(buf)
     while i + 4 <= n:
         if buf[i] != 0xFF:
-            # skip stray bytes until next marker sync
             i += 1
             continue
         marker = buf[i+1]
         i += 2
-        # stand-alone markers (no length)
-        if marker in (0xD8, 0xD9):  # SOI/EOI
+        if marker in (0xD8, 0xD9):  
             continue
         if i + 2 > n:
             return None
@@ -168,14 +155,12 @@ def _find_exif_tiff_base(buf: bytes):
             return None
         seg_data_start = i + 2
         seg_data_end   = i + seg_len
-        if marker == 0xE1:  # APP1
-            # Expect "Exif\0\0" at start of segment data
+        if marker == 0xE1:  
             if seg_data_end - seg_data_start >= 6 and buf[seg_data_start:seg_data_start+6] == b'Exif\x00\x00':
                 tiff_base = seg_data_start + 6
-                # Basic sanity check for TIFF header
                 if tiff_base + 8 <= n:
                     return tiff_base
-        i += seg_len  # jump to next marker
+        i += seg_len
     return None
 
 def _u16(b, off, order):
@@ -187,7 +172,6 @@ def _u32(b, off, order):
     return int.from_bytes(b[off:off+4], order)
 
 def _type_size(t):
-    # TIFF types: 1=BYTE, 2=ASCII, 3=SHORT, 4=LONG, 5=RATIONAL, 7=UNDEFINED
     sizes = {1:1,2:1,3:2,4:4,5:8,7:1}
     return sizes.get(t, 1)
 
@@ -203,7 +187,7 @@ def _parse_ifd(buf, tiff_base, ifd_off, order):
         tag    = _u16(buf, entry+0, order)
         typ    = _u16(buf, entry+2, order)
         cnt    = _u32(buf, entry+4, order)
-        value4 = buf[entry+8:entry+12]  # inline or offset
+        value4 = buf[entry+8:entry+12]  
         tags[tag] = (typ, cnt, value4)
         entry += 12
     return tags
@@ -242,7 +226,7 @@ def _get_ascii(buf, tiff_base, entry, order):
 def _get_numeric(buf, tiff_base, entry, order):
     if entry is None: return "Unknown"
     typ, cnt, value4 = entry
-    if typ in (3, 4):  # SHORT/LONG
+    if typ in (3, 4):  
         b = _get_bytes(buf, tiff_base, entry, order)
         if not b: return "Unknown"
         step = _type_size(typ)
@@ -251,7 +235,7 @@ def _get_numeric(buf, tiff_base, entry, order):
             return int.from_bytes(b[:2], order)
         else:
             return int.from_bytes(b[:4], order)
-    elif typ == 5:  # RATIONAL
+    elif typ == 5:  
         arr = _get_rational_array(buf, tiff_base, entry, order)
         if arr and len(arr) > 0:
             n, d = arr[0]
@@ -285,16 +269,49 @@ def _dms_to_decimal(dms, ref):
         val = -val
     return val
 
-def _normalize_software(sw):
-    s = sw.lower()
-    if "snapseed" in s:   return "Google Snapseed"
-    if "photoshop" in s:  return "Adobe Photoshop"
-    if "lightroom" in s:  return "Adobe Lightroom"
-    if "instagram" in s:  return "Instagram"
-    if "whatsapp" in s:   return "WhatsApp (metadata stripped)"
-    if "gimp" in s:       return "GIMP"
-    if "apple" in s and "photos" in s: return "Apple Photos"
-    return sw
+def _jpeg_dimensions_from_sof(buf: bytes):
+    if not buf.startswith(b'\xff\xd8'):
+        return (None, None)
+    i, n = 2, len(buf)
+    while i + 4 <= n:
+        if buf[i] != 0xFF:
+            i += 1
+            continue
+        marker = buf[i+1]
+        i += 2
+        if marker in (0xD8, 0xD9):  
+            continue
+        if i + 2 > n:
+            break
+        seg_len = int.from_bytes(buf[i:i+2], 'big')
+        if seg_len < 2 or i + seg_len > n:
+            break
+        seg_data_start = i + 2
+        seg_data_end   = i + seg_len
+        if (0xC0 <= marker <= 0xC3) or (0xC5 <= marker <= 0xC7) or (0xC9 <= marker <= 0xCB) or (0xCD <= marker <= 0xCF):
+            seg = buf[seg_data_start:seg_data_end]
+            if len(seg) >= 7:
+                height = int.from_bytes(seg[1:3], 'big')
+                width  = int.from_bytes(seg[3:5], 'big')
+                return (width, height)
+        i += seg_len
+    return (None, None)
+
+def _normalize_software(sw, make=None):
+    s = (sw or "").strip()
+    sl = s.lower()
+    if "snapseed" in sl:   return "Google Snapseed"
+    if "photoshop" in sl:  return "Adobe Photoshop"
+    if "lightroom" in sl:  return "Adobe Lightroom"
+    if "instagram" in sl:  return "Instagram"
+    if "whatsapp" in sl:   return "WhatsApp (metadata stripped)"
+    if "gimp" in sl:       return "GIMP"
+    if "apple" in sl and "photos" in sl: return "Apple Photos"
+    if make and isinstance(make, str):
+        mk = make.lower()
+        if mk == "apple" and all(ch.isdigit() or ch == '.' for ch in s) and any(ch == '.' for ch in s):
+            return f"Apple iOS {s} (Photos)"
+    return s
 
 def _fallback_created_modified_unknown(metadata):
     metadata["created_by"]  = "Unknown (Possibly Metadata-Stripped Image)"
