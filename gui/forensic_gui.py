@@ -13,7 +13,7 @@ from modules.report_generator import generate_report
 class ForensicApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Digital Forensics Metadata Tool")
+        self.root.title("NavDocTrail")
 
         self.root.geometry("700x500")
 
