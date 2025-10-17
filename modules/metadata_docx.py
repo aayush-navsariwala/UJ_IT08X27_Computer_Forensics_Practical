@@ -2,6 +2,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 
 def extract_metadata(file_path):
+    # Default metadata values
     metadata = {
         "file_type": "docx",
         "title": "Unknown",
@@ -39,9 +40,11 @@ def extract_metadata(file_path):
     }
 
     try:
+        # Open docx 
         with zipfile.ZipFile(file_path, 'r') as z:
             names = set(z.namelist())
-
+            
+            # core.xml contains basic data
             if "docProps/core.xml" in names:
                 core_root = ET.fromstring(z.read("docProps/core.xml"))
                 for elem in core_root.iter():
@@ -49,6 +52,7 @@ def extract_metadata(file_path):
                     txt = (elem.text or "").strip() if elem.text else ""
                     if not txt:
                         continue
+                    # Map XML tags to metadata fields
                     if tag == "title":
                         metadata["title"] = txt
                     elif tag == "subject":
@@ -74,11 +78,13 @@ def extract_metadata(file_path):
                     elif tag == "lastPrinted":
                         metadata["last_printed"] = txt
 
+            # app.xml contains application details
             if "docProps/app.xml" in names:
                 app_root = ET.fromstring(z.read("docProps/app.xml"))
                 for elem in app_root.iter():
                     tag = _local(elem.tag)
                     txt = (elem.text or "").strip() if elem.text else ""
+                    # Map application-level tags
                     if tag == "Application" and txt:
                         metadata["created_by"] = txt
                     elif tag == "AppVersion" and txt:
@@ -112,6 +118,7 @@ def extract_metadata(file_path):
                     elif tag == "ScaleCrop" and txt:
                         metadata["scale_crop"] = txt
 
+            # custom.xml has user-defined properties
             if "docProps/custom.xml" in names:
                 try:
                     cust_root = ET.fromstring(z.read("docProps/custom.xml"))
@@ -130,10 +137,12 @@ def extract_metadata(file_path):
                             metadata["custom_properties"][name] = val_text
                 except Exception:
                     pass
-
+            
+            # Detect macros
             if "word/vbaProject.bin" in names or "word/vbaData.xml" in names:
                 metadata["has_macros"] = True
 
+            # Check if track changes is enabled
             if "word/settings.xml" in names:
                 try:
                     settings_root = ET.fromstring(z.read("word/settings.xml"))
@@ -144,11 +153,13 @@ def extract_metadata(file_path):
                 except Exception:
                     pass
 
+            # Fill missing creator fields
             if metadata["last_modified_by"] != "Unknown":
                 metadata["modified_by"] = metadata["last_modified_by"]
             if metadata["modified_by"] == "Unknown" and metadata["created_by"] != "Unknown":
                 metadata["modified_by"] = metadata["created_by"]
 
+            # Handle Google doc files
             if metadata["created_by"] == "Unknown" and metadata["author"] == "Unknown":
                 metadata["created_by"] = "Google Docs / Cloud Editor (no local metadata)"
                 if metadata["modified_by"] == "Unknown":
@@ -159,8 +170,8 @@ def extract_metadata(file_path):
 
     return metadata
 
+# Helper to strip XML namespace from tags
 def _local(tag):
-    """Return the localname of an XML tag ('{ns}local' -> 'local')."""
     if '}' in tag:
         return tag.split('}', 1)[1]
     return tag

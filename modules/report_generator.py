@@ -36,7 +36,7 @@ def generate_report(file_path, metadata, anomalies):
     report_output = "\n".join(report_lines)
     print(report_output)
 
-    # Save report to a file (force UTF-8 to avoid encoding issues)
+    # Save report to a file and force UTF8 for encoding
     os.makedirs("reports", exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     report_file = f"reports/forensic_report_{os.path.splitext(filename)[0]}_{timestamp}.txt"

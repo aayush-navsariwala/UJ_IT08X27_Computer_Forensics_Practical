@@ -1,0 +1,43 @@
+File: 221038026-IT08X27-Research Proposal.docx
+Generated on: 2025-10-17 23:05:28
+
+Extracted Metadata:
+  - File_type: docx
+  - Title: Unknown
+  - Subject: Unknown
+  - Description: Unknown
+  - Keywords: Unknown
+  - Category: Unknown
+  - Language: Unknown
+  - Author: Aayush Navsariwala
+  - Created: 2025-08-07T10:28:00Z
+  - Modified: 2025-08-16T09:38:00Z
+  - Last_modified_by: Aayush Navsariwala
+  - Revision: 105
+  - Last_printed: 2025-08-16T09:37:00Z
+  - Created_by: Microsoft Office Word
+  - Modified_by: Aayush Navsariwala
+  - App_version: 16.0000
+  - Company: Unknown
+  - Template: Normal
+  - Total_time: 558
+  - Pages: 1
+  - Words: 4637
+  - Characters: 26433
+  - Characters_with_spaces: 31008
+  - Lines: 220
+  - Paragraphs: 62
+  - Doc_security: 0
+  - Hyperlinks_changed: false
+  - Shared_doc: false
+  - Links_up_to_date: false
+  - Scale_crop: false
+  - Custom_properties: {}
+  - Has_macros: False
+  - Track_changes: False
+
+Detected Anomalies:
+  - None detected.
+
+Risk Score: 0/100
+→ Low likelihood of tampering.

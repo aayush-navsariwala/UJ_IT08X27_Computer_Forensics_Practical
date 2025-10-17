@@ -1,0 +1,26 @@
+File: IMG_6217.JPG
+Generated on: 2025-10-17 23:09:00
+
+Extracted Metadata:
+  - File_type: image
+  - Make: Apple
+  - Camera_model: iPhone XR
+  - Software: 14.2
+  - Datetime: 2021:01:10 17:14:50
+  - Datetime_digitized: 2021:01:10 17:14:50
+  - Exif_version: Unknown
+  - Width: 4032
+  - Height: 3024
+  - Gps_latitude: Unknown
+  - Gps_longitude: Unknown
+  - Created_by: iPhone XR
+  - Modified_by: Apple iOS 14.2 (Photos)
+  - Title: Unknown
+  - Author: Unknown
+  - Description: Unknown
+
+Detected Anomalies:
+  - Missing or empty field: author
+
+Risk Score: 20/100
+→ Low likelihood of tampering.

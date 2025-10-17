@@ -1,0 +1,26 @@
+File: JRUI7235.JPG
+Generated on: 2025-10-17 23:09:27
+
+Extracted Metadata:
+  - File_type: image
+  - Make: Unknown
+  - Camera_model: Unknown
+  - Software: Instagram
+  - Datetime: 2021:03:22 13:29:20
+  - Datetime_digitized: 2021:03:22 13:29:20
+  - Exif_version: Unknown
+  - Width: 930
+  - Height: 1066
+  - Gps_latitude: Unknown
+  - Gps_longitude: Unknown
+  - Created_by: Unknown
+  - Modified_by: Instagram
+  - Title: Unknown
+  - Author: Unknown
+  - Description: Unknown
+
+Detected Anomalies:
+  - Missing or empty field: author
+
+Risk Score: 20/100
+→ Low likelihood of tampering.

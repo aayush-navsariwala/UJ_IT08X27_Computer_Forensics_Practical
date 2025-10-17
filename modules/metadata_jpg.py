@@ -1,11 +1,12 @@
 def extract_metadata(file_path):
+    # Default metadata dict
     metadata = {
         "file_type": "image",
         "make": "Unknown",
         "camera_model": "Unknown",
         "software": "Unknown",
-        "datetime": "Unknown",            
-        "datetime_digitized": "Unknown",  
+        "datetime": "Unknown",            # EXIF DateTimeOriginal / DateTime
+        "datetime_digitized": "Unknown",  # EXIF DateTimeDigitized
         "exif_version": "Unknown",
         "width": "Unknown",
         "height": "Unknown",
@@ -20,14 +21,14 @@ def extract_metadata(file_path):
 
     try:
         with open(file_path, 'rb') as f:
-            data = f.read()
+            data = f.read()  # Read whole file
 
-        tiff = _find_exif_tiff_base(data)
+        tiff = _find_exif_tiff_base(data)  # Locate EXIF TIFF header
         if tiff is None:
-            _fallback_created_modified_unknown(metadata)
+            _fallback_created_modified_unknown(metadata)  # No EXIF → fallback
             return metadata
 
-        endian = data[tiff:tiff+2]
+        endian = data[tiff:tiff+2]  # 'II' or 'MM'
         if endian == b'II':
             byte_order = 'little'
         elif endian == b'MM':
@@ -36,33 +37,34 @@ def extract_metadata(file_path):
             _fallback_created_modified_unknown(metadata)
             return metadata
 
-        if _u16(data, tiff+2, byte_order) != 0x002A:
+        if _u16(data, tiff+2, byte_order) != 0x002A:  # TIFF magic number
             _fallback_created_modified_unknown(metadata)
             return metadata
 
-        ifd0_rel = _u32(data, tiff+4, byte_order)
+        ifd0_rel = _u32(data, tiff+4, byte_order)  # IFD0 offset
         ifd0 = tiff + ifd0_rel
-        tags0 = _parse_ifd(data, tiff, ifd0, byte_order)
+        tags0 = _parse_ifd(data, tiff, ifd0, byte_order)  # Parse IFD0
 
-        if 0x010F in tags0:  
+        if 0x010F in tags0:  # Make
             metadata["make"] = _get_ascii(data, tiff, tags0[0x010F], byte_order)
-        if 0x0110 in tags0:  
+        if 0x0110 in tags0:  # Model
             metadata["camera_model"] = _get_ascii(data, tiff, tags0[0x0110], byte_order)
-        if 0x0131 in tags0:  
+        if 0x0131 in tags0:  # Software
             sw = _get_ascii(data, tiff, tags0[0x0131], byte_order)
             metadata["software"] = sw
             metadata["modified_by"] = _normalize_software(sw, metadata.get("make"))
 
-        if 0x0132 in tags0 and metadata["datetime"] == "Unknown":
+        if 0x0132 in tags0 and metadata["datetime"] == "Unknown":  # DateTime
             dt0 = _get_ascii(data, tiff, tags0[0x0132], byte_order)
             if dt0 and dt0 != "Unknown":
                 metadata["datetime"] = dt0
 
-        if 0x0100 in tags0:
+        if 0x0100 in tags0:  # ImageWidth
             metadata["width"]  = _get_numeric(data, tiff, tags0[0x0100], byte_order)
-        if 0x0101 in tags0:
+        if 0x0101 in tags0:  # ImageLength
             metadata["height"] = _get_numeric(data, tiff, tags0[0x0101], byte_order)
 
+        # Pointers to EXIF and GPS IFDs
         exif_ifd_ptr = _get_offset_value(data, tiff, tags0.get(0x8769), byte_order) if 0x8769 in tags0 else None
         gps_ifd_ptr  = _get_offset_value(data, tiff, tags0.get(0x8825), byte_order) if 0x8825 in tags0 else None
 
@@ -70,23 +72,23 @@ def extract_metadata(file_path):
             exif_ifd = tiff + exif_ifd_ptr
             tags_exif = _parse_ifd(data, tiff, exif_ifd, byte_order)
 
-            if 0x9003 in tags_exif:  
+            if 0x9003 in tags_exif:  # DateTimeOriginal
                 metadata["datetime"] = _get_ascii(data, tiff, tags_exif[0x9003], byte_order)
-            if 0x9004 in tags_exif:  
+            if 0x9004 in tags_exif:  # DateTimeDigitized
                 metadata["datetime_digitized"] = _get_ascii(data, tiff, tags_exif[0x9004], byte_order)
-            if 0x9000 in tags_exif:  
+            if 0x9000 in tags_exif:  # ExifVersion
                 exv = _get_bytes(data, tiff, tags_exif[0x9000], byte_order)
                 if exv:
                     try:
-                        s = "".join(chr(b) for b in exv if 48 <= b <= 57)  
+                        s = "".join(chr(b) for b in exv if 48 <= b <= 57)  # Keep digits
                         metadata["exif_version"] = s if s else exv.hex()
                     except:
                         metadata["exif_version"] = exv.hex()
 
-            if 0xA002 in tags_exif:
+            if 0xA002 in tags_exif:  # PixelXDimension
                 w = _get_numeric(data, tiff, tags_exif[0xA002], byte_order)
                 if w: metadata["width"] = w
-            if 0xA003 in tags_exif:
+            if 0xA003 in tags_exif:  # PixelYDimension
                 h = _get_numeric(data, tiff, tags_exif[0xA003], byte_order)
                 if h: metadata["height"] = h
 
@@ -98,17 +100,18 @@ def extract_metadata(file_path):
             lat_ref = _get_ascii(data, tiff, tags_gps.get(0x0001), byte_order) if 0x0001 in tags_gps else None
             lon_ref = _get_ascii(data, tiff, tags_gps.get(0x0003), byte_order) if 0x0003 in tags_gps else None
 
-            if 0x0002 in tags_gps:
+            if 0x0002 in tags_gps:  # GPSLatitude
                 lat = _get_rational_array(data, tiff, tags_gps[0x0002], byte_order)
-            if 0x0004 in tags_gps:
+            if 0x0004 in tags_gps:  # GPSLongitude
                 lon = _get_rational_array(data, tiff, tags_gps[0x0004], byte_order)
 
             if lat and lon and len(lat) == 3 and len(lon) == 3 and lat_ref and lon_ref:
-                lat_dec = _dms_to_decimal(lat, lat_ref)
+                lat_dec = _dms_to_decimal(lat, lat_ref)  # Convert DMS→decimal
                 lon_dec = _dms_to_decimal(lon, lon_ref)
                 metadata["gps_latitude"]  = f"{lat_dec:.6f}"
                 metadata["gps_longitude"] = f"{lon_dec:.6f}"
 
+        # If EXIF dims missing, try SOF in JPEG stream
         if metadata["width"] == "Unknown" or metadata["height"] == "Unknown":
             sof_w, sof_h = _jpeg_dimensions_from_sof(data)
             if sof_w and metadata["width"] == "Unknown":
@@ -116,55 +119,59 @@ def extract_metadata(file_path):
             if sof_h and metadata["height"] == "Unknown":
                 metadata["height"] = sof_h
 
+        # Fill missing digitized time from datetime
         if metadata["datetime_digitized"] == "Unknown" and metadata["datetime"] != "Unknown":
             metadata["datetime_digitized"] = metadata["datetime"]
 
+        # Derive created_by from camera model/make
         if metadata["camera_model"] != "Unknown":
             metadata["created_by"] = metadata["camera_model"]
         elif metadata["make"] != "Unknown":
             metadata["created_by"] = metadata["make"]
             
+        # Normalise modified_by from Software
         if metadata["software"] != "Unknown":
             metadata["modified_by"] = _normalize_software(metadata["software"], metadata.get("make"))
             
+        # No camera/software → fallback unknowns
         if metadata["camera_model"] == "Unknown" and metadata["software"] == "Unknown":
             _fallback_created_modified_unknown(metadata)
 
     except Exception as e:
-        print(f"[Error] Could not extract image metadata: {e}")
+        print(f"[Error] Could not extract image metadata: {e}")  # Log error
 
-    return metadata
+    return metadata  # Return filled dict
 
 def _find_exif_tiff_base(buf: bytes):
-    if not buf.startswith(b'\xff\xd8'):  
+    if not buf.startswith(b'\xff\xd8'):  # Ensure JPEG
         return None
     i = 2
     n = len(buf)
     while i + 4 <= n:
-        if buf[i] != 0xFF:
+        if buf[i] != 0xFF:  # Seek marker
             i += 1
             continue
         marker = buf[i+1]
         i += 2
-        if marker in (0xD8, 0xD9):  
+        if marker in (0xD8, 0xD9):  # SOI/EOI skip
             continue
         if i + 2 > n:
             return None
-        seg_len = int.from_bytes(buf[i:i+2], 'big')
+        seg_len = int.from_bytes(buf[i:i+2], 'big')  # Segment length
         if seg_len < 2 or i + seg_len > n:
             return None
         seg_data_start = i + 2
         seg_data_end   = i + seg_len
-        if marker == 0xE1:  
+        if marker == 0xE1:  # APP1 (EXIF)
             if seg_data_end - seg_data_start >= 6 and buf[seg_data_start:seg_data_start+6] == b'Exif\x00\x00':
                 tiff_base = seg_data_start + 6
                 if tiff_base + 8 <= n:
-                    return tiff_base
+                    return tiff_base  # TIFF start
         i += seg_len
-    return None
+    return None  # No EXIF
 
 def _u16(b, off, order):
-    if off+2 > len(b): return 0
+    if off+2 > len(b): return 0  # Bounds check
     return int.from_bytes(b[off:off+2], order)
 
 def _u32(b, off, order):
@@ -172,34 +179,34 @@ def _u32(b, off, order):
     return int.from_bytes(b[off:off+4], order)
 
 def _type_size(t):
-    sizes = {1:1,2:1,3:2,4:4,5:8,7:1}
+    sizes = {1:1,2:1,3:2,4:4,5:8,7:1}  # TIFF type sizes
     return sizes.get(t, 1)
 
 def _parse_ifd(buf, tiff_base, ifd_off, order):
     tags = {}
     if ifd_off is None or ifd_off < 0 or ifd_off+2 > len(buf):
         return tags
-    count = _u16(buf, ifd_off, order)
+    count = _u16(buf, ifd_off, order)  # Number of entries
     entry = ifd_off + 2
     for _ in range(count):
-        if entry+12 > len(buf):
+        if entry+12 > len(buf):  # Each entry 12 bytes
             break
         tag    = _u16(buf, entry+0, order)
         typ    = _u16(buf, entry+2, order)
         cnt    = _u32(buf, entry+4, order)
-        value4 = buf[entry+8:entry+12]  
+        value4 = buf[entry+8:entry+12]  # Inline or offset
         tags[tag] = (typ, cnt, value4)
         entry += 12
     return tags
 
 def _is_inline(typ, cnt):
-    return cnt * _type_size(typ) <= 4
+    return cnt * _type_size(typ) <= 4  # Fits in value4
 
 def _get_offset_value(buf, tiff_base, entry, order):
     if entry is None: return None
     typ, cnt, value4 = entry
     if _is_inline(typ, cnt):
-        return None
+        return None  # No offset if inline
     return int.from_bytes(value4, order)
 
 def _get_bytes(buf, tiff_base, entry, order):
@@ -207,8 +214,8 @@ def _get_bytes(buf, tiff_base, entry, order):
     typ, cnt, value4 = entry
     size = _type_size(typ) * cnt
     if _is_inline(typ, cnt):
-        return value4[:size]
-    off = int.from_bytes(value4, order)
+        return value4[:size]  # Inline data
+    off = int.from_bytes(value4, order)  # Data offset
     start = tiff_base + off
     end = start + size
     if start < 0 or end > len(buf): return None
@@ -226,7 +233,7 @@ def _get_ascii(buf, tiff_base, entry, order):
 def _get_numeric(buf, tiff_base, entry, order):
     if entry is None: return "Unknown"
     typ, cnt, value4 = entry
-    if typ in (3, 4):  
+    if typ in (3, 4):  # SHORT/LONG
         b = _get_bytes(buf, tiff_base, entry, order)
         if not b: return "Unknown"
         step = _type_size(typ)
@@ -235,7 +242,7 @@ def _get_numeric(buf, tiff_base, entry, order):
             return int.from_bytes(b[:2], order)
         else:
             return int.from_bytes(b[:4], order)
-    elif typ == 5:  
+    elif typ == 5:  # RATIONAL
         arr = _get_rational_array(buf, tiff_base, entry, order)
         if arr and len(arr) > 0:
             n, d = arr[0]
@@ -257,7 +264,7 @@ def _get_rational_array(buf, tiff_base, entry, order):
         if s+8 > len(b): break
         num = int.from_bytes(b[s:s+4], order)
         den = int.from_bytes(b[s+4:s+8], order)
-        out.append((num, den if den != 0 else 1))
+        out.append((num, den if den != 0 else 1))  # Avoid div/0
     return out
 
 def _dms_to_decimal(dms, ref):
@@ -279,7 +286,7 @@ def _jpeg_dimensions_from_sof(buf: bytes):
             continue
         marker = buf[i+1]
         i += 2
-        if marker in (0xD8, 0xD9):  
+        if marker in (0xD8, 0xD9):  # Skip SOI/EOI
             continue
         if i + 2 > n:
             break
@@ -288,6 +295,7 @@ def _jpeg_dimensions_from_sof(buf: bytes):
             break
         seg_data_start = i + 2
         seg_data_end   = i + seg_len
+        # SOF markers (baseline/progressive)
         if (0xC0 <= marker <= 0xC3) or (0xC5 <= marker <= 0xC7) or (0xC9 <= marker <= 0xCB) or (0xCD <= marker <= 0xCF):
             seg = buf[seg_data_start:seg_data_end]
             if len(seg) >= 7:
@@ -310,8 +318,8 @@ def _normalize_software(sw, make=None):
     if make and isinstance(make, str):
         mk = make.lower()
         if mk == "apple" and all(ch.isdigit() or ch == '.' for ch in s) and any(ch == '.' for ch in s):
-            return f"Apple iOS {s} (Photos)"
-    return s
+            return f"Apple iOS {s} (Photos)"  # iOS version string
+    return s  # Default: original string
 
 def _fallback_created_modified_unknown(metadata):
     metadata["created_by"]  = "Unknown (Possibly Metadata-Stripped Image)"

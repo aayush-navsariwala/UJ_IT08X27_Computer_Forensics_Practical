@@ -1,12 +1,14 @@
 import os
 import sys
 
+# Project root (parent of this file's dir)
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+    sys.path.insert(0, PROJECT_ROOT)  # Ensure local modules import
 
-from modules.metadata_jpg import extract_metadata
+from modules.metadata_jpg import extract_metadata  # JPEG EXIF extractor
 
+# Supported JPEG extensions (case-sensitive list for speed)
 SUPPORTED_EXTS = {".jpg", ".jpeg", ".JPG", ".JPEG"}
 
 def scan_folder(folder):
@@ -18,7 +20,6 @@ def scan_folder(folder):
     return sorted(files)
 
 def summarize_flags(meta: dict):
-    """Return simple booleans and notes for quick diagnostics."""
     has_any_exif = any(
         meta.get(k, "Unknown") != "Unknown"
         for k in ("make", "camera_model", "software", "datetime", "datetime_digitized", "exif_version")
@@ -56,6 +57,7 @@ def print_report(path, meta, flags):
     for k in ordered_keys:
         if k in meta:
             print(f"  {k:18s}: {meta[k]}")
+
     print("- Quick Checks -")
     print(f"  Any EXIF present     : {flags['has_any_exif']}")
     print(f"  GPS present          : {flags['gps_present']}")
@@ -63,6 +65,7 @@ def print_report(path, meta, flags):
     print(f"  Missing capture time : {flags['missing_time']}")
     print(f"  Dimensions known     : {flags['size_known']}")
 
+    # Optional notes based on flags
     notes = []
     if flags["stripped_like"]:
         notes.append("Possible metadata-stripped image (e.g., social media or messaging app).")
@@ -70,7 +73,6 @@ def print_report(path, meta, flags):
         notes.append("Image dimensions not found in EXIF (may still be derivable from JPEG SOF).")
     if flags["missing_time"]:
         notes.append("No DateTimeOriginal/DateTime found. Some phones/apps omit this.")
-
     if notes:
         print("- Notes -")
         for n in notes:
@@ -91,15 +93,15 @@ def main():
 
     for path in files:
         try:
-            meta = extract_metadata(path)
+            meta = extract_metadata(path)  # Parse EXIF/fields
         except Exception as e:
             print("=" * 80)
             print(f"File: {path}")
             print(f"[ERROR] extract_metadata raised an exception: {e}")
             continue
 
-        flags = summarize_flags(meta)
-        print_report(path, meta, flags)
+        flags = summarize_flags(meta)     # Quick booleans
+        print_report(path, meta, flags)   # Human-readable output
 
     print("\nDone.")
 

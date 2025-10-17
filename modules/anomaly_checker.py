@@ -1,26 +1,33 @@
 from datetime import datetime
 
 def check_anomalies(metadata):
+    # List to store detected anomalies
     anomalies = []
 
+    # Check for required fields
     required_fields = ["created", "modified", "author", "application", "datetime"]
     for field in required_fields:
+        # If field exists but is empty, unknown or none
         if field in metadata and metadata[field] in ["", "Unknown", None]:
             anomalies.append(f"Missing or empty field: {field}")
 
+    # Validate timestamp order
     if "created" in metadata and "modified" in metadata:
         try:
             created = extract_datetime(metadata["created"])
             modified = extract_datetime(metadata["modified"])
+            # If both timestamps are found
             if created and modified and modified < created:
                 anomalies.append("Modified date is earlier than creation date.")
         except:
             pass
 
+    # Same timestamps may suggest metadata overwriting 
     if "created" in metadata and "modified" in metadata:
         if metadata["created"] == metadata["modified"]:
             anomalies.append("Created and modified timestamps are identical. Possible timestamp overwrite.")
 
+    # Check for inconsistencies in application and producer of file 
     if "application" in metadata and "producer" in metadata:
         app = metadata["application"].lower()
         prod = metadata["producer"].lower()
@@ -29,11 +36,8 @@ def check_anomalies(metadata):
 
     return anomalies
 
+# Find datetime format in metadata
 def extract_datetime(raw):
-    """
-    Attempts to parse a datetime string into a datetime object.
-    Supports common DOCX and PDF formats.
-    """
     try:
         if raw.startswith("D:"):
             return datetime.strptime(raw[2:16], "%Y%m%d%H%M%S")
